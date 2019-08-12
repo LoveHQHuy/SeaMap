@@ -47,6 +47,7 @@ class MapObject
 };
 class MapPolyLine
 {
+    int type = 0;
     Map<Point,Vector<PointF>> cellList = new HashMap<Point,Vector<PointF>>();
 }
 public class MapView extends View {
@@ -67,12 +68,13 @@ public class MapView extends View {
     Point currentCell;
     private float mlat = 8.5f;//lattitude of the center of the screen
     private float mlon = 111.9f;//longtitude of the center of the screen
-    private float mScale =3f;// 1km = mScale*pixcels
+    private float mScale =5;// 1km = mScale*pixcels
     private int scrCtY,scrCtX;
     Point pointtemp;
     PointF dragStart,dragStop;
     PointF pointTestlatlon;
     private Context mCtx;
+    Paint textPaint,depthLinePaint;
     Button buttonZoomIn,buttonZoomOut;
     //private Point pt = new Point(scrWidth/2,scrHeight/2);
     GestureDetector detector;
@@ -81,75 +83,71 @@ public class MapView extends View {
         mCtx =      context; //<-- fill it with the Context you are passed
         currentCell = new Point();
         LoadText();
-//        buttonZoomIn = (Button) findViewById(R.id.button2);
-//        buttonZoomIn.setOnClickListener(new View.OnClickListener() {
-//            public void onClick(View v) {
-//                zoomin();
-//            }
-//        });
-//        buttonZoomOut = (Button) findViewById(R.id.button);
-//        buttonZoomOut.setOnClickListener(new View.OnClickListener() {
-//            public void onClick(View v) {
-//                zoomout();
-//            }
-//        });
+        textPaint = new Paint();
+        textPaint.setColor(Color.rgb(0,0,0));
+
+        depthLinePaint = new Paint();
+        depthLinePaint.setColor(Color.rgb(0,0,200));
     }
 
     @Override
     public void onDraw(Canvas canvas){// draw function
         scrCtY = getHeight()/2;
         scrCtX = getWidth()/2;
-        canvas.drawColor(Color.rgb(0,0,0));
-        Paint paint = new Paint();
-        paint.setColor(Color.rgb(200,200,100));
-        paint.setTextSize(14);
+        canvas.drawColor(Color.rgb(200,255,255));
+        textPaint.setTextSize(getWidth()/40);
         PointF topRightLatLon = ConvScrPointToWGS(scrCtX*2,0);
         PointF botLeftLatLon = ConvScrPointToWGS(0,scrCtY*2);
         //draw test point
         pointtemp= ConvWGSToScrPoint(topRightLatLon.x,topRightLatLon.y);
-        canvas.drawCircle(pointtemp.x, pointtemp.y, 20, paint);
+        canvas.drawCircle(pointtemp.x, pointtemp.y, 20, textPaint);
         pointtemp= ConvWGSToScrPoint(botLeftLatLon.x,botLeftLatLon.y);
-        canvas.drawCircle(pointtemp.x, pointtemp.y, 20, paint);
+        canvas.drawCircle(pointtemp.x, pointtemp.y, 20, textPaint);
         //
         //scan all cells inside the screen and draw all text object
-         for (int cellLon = (int)botLeftLatLon.x;cellLon<(int)topRightLatLon.x;cellLon+=1)
-         {
-             for (int cellLat = (int)botLeftLatLon.y;cellLat<(int)topRightLatLon.y;cellLat+=1)
-             {
-                 //draw data of current cell
-                 currentCell = new Point(cellLon,cellLat);
-                 if(cellObjectList.containsKey(currentCell)) {
-                     Vector<MapObject> objectList = cellObjectList.get(currentCell);
-                     for (MapObject obj : objectList) {
-                         Point p = ConvWGSToScrPoint(obj.lon, obj.lat);
-                         canvas.drawText(obj.name, p.x, p.y, paint);
-                     }
-                 }
-             }
-         }
-         //draw polylines
+        for (int cellLon = (int)botLeftLatLon.x;cellLon<=(int)topRightLatLon.x;cellLon+=1)
+        {
+            for (int cellLat = (int)botLeftLatLon.y;cellLat<=(int)topRightLatLon.y;cellLat+=1)
+            {
+                //draw data of current cell
+                currentCell = new Point(cellLon,cellLat);
+                if(cellObjectList.containsKey(currentCell)) {
+                    Vector<MapObject> objectList = cellObjectList.get(currentCell);
+                    for (MapObject obj : objectList) {
+                        Point p = ConvWGSToScrPoint(obj.lon, obj.lat);
+                        if(obj.Type==1)canvas.drawText(obj.name, p.x, p.y, textPaint);// text
+                        else if((obj.Type==2))
+                        {
+                            if(mScale>(float)(getWidth()/60))
+                                canvas.drawText(obj.name, p.x, p.y, textPaint);// depth point
+                        }
+                    }
+                }
+            }
+        }
+        //draw polylines
         for (MapPolyLine pl:plList)
         {
             //for each line, loop over interested cells only
-            for (int cellLon = (int)botLeftLatLon.x;cellLon<(int)topRightLatLon.x;cellLon+=1)
+            for (int cellLon = (int)botLeftLatLon.x;cellLon<=(int)topRightLatLon.x;cellLon+=1)
             {
-                for (int cellLat = (int)botLeftLatLon.y;cellLat<(int)topRightLatLon.y;cellLat+=1) {
+                for (int cellLat = (int)botLeftLatLon.y;cellLat<=(int)topRightLatLon.y;cellLat+=1) {
                     //draw data of current cell
                     currentCell = new Point(cellLon,cellLat);
                     Vector<PointF> pointfs = pl.cellList.get(currentCell);
                     if(pointfs==null)continue;
-                    int size = pointfs.size()*2;
+                    int size = pointfs.size()*4;
                     float pointis[] = new float[size];
-                    for (int i=0;i<size;i+=2) {
-                        Point p1 = ConvWGSToScrPoint(pointfs.elementAt(i/2).x, pointfs.elementAt(i/2).y);
+                    for (int i=0;i<size-4;i+=4) {
+                        Point p1 = ConvWGSToScrPoint(pointfs.elementAt(i/4).x, pointfs.elementAt(i/4).y);
+                        Point p2 = ConvWGSToScrPoint(pointfs.elementAt(i/4+1).x, pointfs.elementAt(i/4+1).y);
                         pointis[i] = (float) p1.x;
                         pointis[i+1] =(float) p1.y;
-                        if((int)(p1.x*p1.y)==0)
-                        {
-                            p1=p1;
-                        }
+                        pointis[i+2] = (float) p2.x;
+                        pointis[i+3] =(float) p2.y;
+
                     }
-                    canvas.drawLines(pointis,paint);
+                    if(pl.type==1)canvas.drawLines(pointis,depthLinePaint);
                 }
 
             }
@@ -170,23 +168,29 @@ public class MapView extends View {
                     String name =reader.readLine();
                     String latlon =reader.readLine();
                     String font =reader.readLine();
+                    int type = 0;
                     if(font.contains("(\"ABC Tahoma\",2,0,2105599)")) {
-                        String[] strList= latlon.split(" ");
-                        float lon = Float.parseFloat(strList[4]);
-                        float lat = Float.parseFloat(strList[5]);
-                        Point key = new Point((int)(lon),(int)(lat));
-                        if(cellObjectList.containsKey(key)) {
-                            Vector<MapObject> cell = (cellObjectList.get(key));
-                            cell.add(new MapObject(name, 1, lon, lat));
-                            cellObjectList.put(key,cell);
-                        }
-                        else
-                        {
-                            Vector<MapObject> newcell = new Vector<MapObject>();
-                            newcell.add(new MapObject(name, 1, lon, lat));
-                            cellObjectList.put(key,newcell);
-                        }
+                        type=1;// island names
                     }
+                    else if(font.contains("Arial"))
+                    {
+                        type=2;//water depth
+                    }
+                    String[] strList= latlon.split(" ");
+                    float lon = Float.parseFloat(strList[4]);
+                    float lat = Float.parseFloat(strList[5]);
+                    Point key = new Point((int)(lon),(int)(lat));
+                    Vector<MapObject> cell;
+                    if(cellObjectList.containsKey(key)) {
+                        cell = (cellObjectList.get(key));
+
+                    }
+                    else
+                    {
+                        cell = new Vector<MapObject>();
+                    }
+                    cell.add(new MapObject(name, type, lon, lat));
+                    cellObjectList.put(key,cell);
 
                 }
                 else if(mLine.contains("Pline"))
@@ -214,6 +218,10 @@ public class MapView extends View {
                             pl.cellList.put(key,newcell);
                         }
                     }
+                    String lineType =reader.readLine();
+
+                    if(lineType.contains("Pen (1,2,8684287)"))
+                        pl.type=1;
                     plList.add(pl);
                 }
 
